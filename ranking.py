@@ -70,23 +70,28 @@ def rank_flights(
 
     if budget_lower == "low":
         df["score"] = df["price_n"]
-        reason_fn = lambda r: (
-            f"Cheapest option at ${r['price']:.0f} — prioritised for low budget"
-        )
+        def reason_fn(r):
+            return (
+                f"Cheapest option at ${r['price']:.0f} — prioritised for low budget"
+            )
     elif budget_lower == "high":
         df["score"] = 0.1 * df["price_n"] + 0.3 * df["duration_n"] + 0.6 * df["stops_n"]
-        reason_fn = lambda r: (
-            f"{'Non-stop' if r['stops'] == 0 else f\"{r['stops']}-stop\"} flight "
-            f"({r['duration_min'] // 60}h {r['duration_min'] % 60}m) at ${r['price']:.0f} "
-            f"— comfort-prioritised for high budget"
-        )
+        def reason_fn(r):
+            stops_label = "Non-stop" if r["stops"] == 0 else f"{r['stops']}-stop"
+            return (
+                f"{stops_label} flight "
+                f"({r['duration_min'] // 60}h {r['duration_min'] % 60}m) at ${r['price']:.0f} "
+                f"— comfort-prioritised for high budget"
+            )
     else:  # Medium
         df["score"] = 0.5 * df["price_n"] + 0.3 * df["duration_n"] + 0.2 * df["stops_n"]
-        reason_fn = lambda r: (
-            f"${r['price']:.0f}, {r['duration_min'] // 60}h {r['duration_min'] % 60}m, "
-            f"{'non-stop' if r['stops'] == 0 else f\"{r['stops']} stop(s)\"} "
-            f"— best price/duration balance"
-        )
+        def reason_fn(r):
+            stops_label = "non-stop" if r["stops"] == 0 else f"{r['stops']} stop(s)"
+            return (
+                f"${r['price']:.0f}, {r['duration_min'] // 60}h {r['duration_min'] % 60}m, "
+                f"{stops_label} "
+                f"— best price/duration balance"
+            )
 
     df = df.sort_values("score").head(top_n).reset_index(drop=True)
 
