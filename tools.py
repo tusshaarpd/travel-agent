@@ -3,7 +3,7 @@ tools.py — External API clients for the AI Travel Assistant.
 
 Provides two public fetch functions:
   - fetch_flights()  → SerpAPI / Google Flights
-  - fetch_hotels()   → Booking.com MCP endpoint
+  - fetch_hotels()   → SerpAPI / Google Hotels
 
 Both functions fall back to rich mock data when API keys are absent or
 the upstream service is unreachable, so the app remains fully functional
@@ -22,7 +22,6 @@ import os
 import time
 from typing import TypedDict
 
-import httpx
 import requests
 from dotenv import load_dotenv
 
@@ -185,71 +184,69 @@ def fetch_hotels(
     budget: str,     # "Low" | "Medium" | "High"
 ) -> list[HotelResult]:
     """
-    Fetch hotel options via the Booking.com MCP endpoint.
+    Search for available hotels.
 
-    The MCP endpoint is called with a JSON body following the MCP tool-
-    invocation schema.  Falls back to mock data when the endpoint is not
-    configured or unreachable.
+    Attempts SerpAPI Google Hotels first; falls back to mock data when
+    SERPAPI_API_KEY is missing or the request fails.
     """
-    endpoint = os.getenv("BOOKING_MCP_ENDPOINT", "")
-    api_key = os.getenv("BOOKING_MCP_API_KEY", "")
-
-    if not endpoint:
-        logger.info("BOOKING_MCP_ENDPOINT not set — using mock hotel data.")
+    api_key = os.getenv("SERPAPI_API_KEY", "")
+    if not api_key:
+        logger.info("SERPAPI_API_KEY not set — using mock hotel data.")
         return _mock_hotels(destination)
 
     try:
         return _with_retry(
-            _booking_mcp_hotels,
-            destination, checkin, checkout, budget, endpoint, api_key,
+            _serpapi_hotels, destination, checkin, checkout, api_key
         )
     except Exception as exc:
-        logger.error("Booking MCP hotel search failed: %s — falling back to mocks", exc)
+        logger.error("SerpAPI hotel search failed: %s — falling back to mocks", exc)
         return _mock_hotels(destination)
 
 
-def _booking_mcp_hotels(
+def _serpapi_hotels(
     destination: str,
     checkin: str,
     checkout: str,
-    budget: str,
-    endpoint: str,
     api_key: str,
 ) -> list[HotelResult]:
-    """POST to the Booking.com MCP endpoint and parse the response."""
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
+    """Hit the SerpAPI Google Hotels endpoint and parse results."""
+    params = {
+        "engine": "google_hotels",
+        "q": destination,
+        "check_in_date": checkin,
+        "check_out_date": checkout,
+        "currency": "USD",
+        "hl": "en",
+        "api_key": api_key,
     }
-    body = {
-        "tool": "search_hotels",
-        "arguments": {
-            "destination": destination,
-            "checkin_date": checkin,
-            "checkout_date": checkout,
-            "budget_tier": budget.lower(),  # "low" | "medium" | "high"
-            "currency": "USD",
-            "language": "en",
-        },
-    }
-
-    with httpx.Client(timeout=15) as client:
-        response = client.post(endpoint, json=body, headers=headers)
-        response.raise_for_status()
-
+    response = requests.get(
+        "https://serpapi.com/search",
+        params=params,
+        timeout=20,
+    )
+    response.raise_for_status()
     data = response.json()
-    hotels: list[HotelResult] = []
 
-    # MCP response: {"result": {"hotels": [...]}}
-    for item in data.get("result", {}).get("hotels", []):
+    hotels: list[HotelResult] = []
+    for item in data.get("properties", []):
+        rate = item.get("rate_per_night") or {}
+        price = float(rate.get("extracted_lowest") or 0)
+        # Skip listings without a usable nightly price (e.g. some vacation rentals)
+        if price <= 0:
+            continue
+
+        # Google reviews use a 0–5 scale; HotelResult.rating uses 0–10
+        raw_rating = float(item.get("overall_rating") or 0)
+        rating = raw_rating * 2 if raw_rating <= 5 else raw_rating
+
         hotels.append(
             HotelResult(
                 name=item.get("name", "Unknown Hotel"),
-                price_per_night=float(item.get("price_per_night", 0)),
-                rating=float(item.get("review_score", 0)),
-                distance_km=float(item.get("distance_to_centre", 0)),
-                address=item.get("address", ""),
-                booking_url=item.get("url", ""),
+                price_per_night=price,
+                rating=rating,
+                distance_km=0.0,
+                address=item.get("address", "") or "",
+                booking_url=item.get("link", "") or "",
             )
         )
 
@@ -259,7 +256,7 @@ def _booking_mcp_hotels(
 def _mock_hotels(destination: str) -> list[HotelResult]:
     """
     Return 8 realistic-looking mock hotels for the given destination.
-    Used when Booking.com MCP is not configured or unreachable.
+    Used when SERPAPI_API_KEY is absent or the API call fails.
     """
     dest = destination.title()
     base_url = f"https://www.booking.com/search.html?ss={destination}"

@@ -52,8 +52,6 @@ logging.basicConfig(level=logging.INFO)
 _SECRET_KEYS = (
     "OPENAI_API_KEY",
     "SERPAPI_API_KEY",
-    "BOOKING_MCP_ENDPOINT",
-    "BOOKING_MCP_API_KEY",
 )
 for _k in _SECRET_KEYS:
     if not os.getenv(_k):
@@ -166,14 +164,6 @@ with st.sidebar:
         )
         st.text_input("OPENAI_API_KEY", type="password", key="ui_OPENAI_API_KEY")
         st.text_input("SERPAPI_API_KEY", type="password", key="ui_SERPAPI_API_KEY")
-        st.text_input(
-            "BOOKING_MCP_ENDPOINT",
-            key="ui_BOOKING_MCP_ENDPOINT",
-            placeholder="https://…",
-        )
-        st.text_input(
-            "BOOKING_MCP_API_KEY", type="password", key="ui_BOOKING_MCP_API_KEY"
-        )
 
     # Apply UI-provided keys to os.environ (overrides .env / st.secrets).
     # Invalidate the cached search if any key changed so the next search
@@ -268,7 +258,7 @@ with st.sidebar:
             st.session_state.chat_history = []
 
     st.markdown("---")
-    st.caption("Powered by OpenAI · SerpAPI · Booking.com MCP")
+    st.caption("Powered by OpenAI · SerpAPI")
 
 
 # ── Main area ─────────────────────────────────────────────────────────────────
@@ -283,7 +273,7 @@ if not st.session_state.search_complete:
         """
         ### What this assistant can do for you
         - **Real-time flight search** via Google Flights (SerpAPI)
-        - **Hotel recommendations** via Booking.com MCP
+        - **Hotel recommendations** via Google Hotels (SerpAPI)
         - **Smart ranking** tailored to your budget preference
         - **Personalised itinerary generation** — day-by-day plans with meeting slots,
           café recommendations, and commute buffers
