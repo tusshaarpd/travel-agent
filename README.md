@@ -73,7 +73,33 @@ travel-agent/
 
 ---
 
-## Installation & Setup
+## Deployment
+
+### Option 1 — Streamlit Cloud (recommended, free tier available)
+
+1. **Push this repo to GitHub** — include `packages.txt` and `.streamlit/config.toml`
+
+2. Go to **[share.streamlit.io](https://share.streamlit.io)** → **New app**
+   - Repository: `your-github-username/travel-agent`
+   - Branch: `main`
+   - Main file path: `app.py`
+
+3. Open **Settings → Secrets** and paste your keys in TOML format:
+   ```toml
+   OPENAI_API_KEY = "sk-..."
+   SERPAPI_API_KEY = "your-serpapi-key"
+   BOOKING_MCP_ENDPOINT = "https://your-mcp-endpoint.example.com/mcp"
+   BOOKING_MCP_API_KEY = "your-mcp-bearer-token"
+   ```
+   All secrets are optional — the app runs in demo mode without them.
+
+4. Click **Deploy**. Streamlit Cloud installs `packages.txt` (system deps) then `requirements.txt` automatically.
+
+> **How secrets work:** `app.py` copies `st.secrets` values into `os.environ` at startup, so `tools.py` and `agent.py` read them via `os.getenv()` with no extra changes needed.
+
+---
+
+### Option 2 — Run locally
 
 ```bash
 # 1. Clone the repository

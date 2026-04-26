@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import os
 
 import pandas as pd
 import streamlit as st
@@ -43,6 +44,23 @@ from tools import fetch_flights, fetch_hotels
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
+
+# ── Streamlit Cloud secret injection ──────────────────────────────────────────
+# Streamlit Cloud stores secrets in st.secrets (not env vars).
+# We copy them into os.environ here so that tools.py and agent.py
+# (which use os.getenv) work identically on Cloud and locally.
+_SECRET_KEYS = (
+    "OPENAI_API_KEY",
+    "SERPAPI_API_KEY",
+    "BOOKING_MCP_ENDPOINT",
+    "BOOKING_MCP_API_KEY",
+)
+for _k in _SECRET_KEYS:
+    if not os.getenv(_k):
+        try:
+            os.environ[_k] = st.secrets[_k]
+        except (KeyError, FileNotFoundError):
+            pass  # Key not configured — demo/mock mode will be used
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
