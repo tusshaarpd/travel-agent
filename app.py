@@ -45,20 +45,14 @@ from tools import fetch_flights, fetch_hotels
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 
-# ── Streamlit Cloud secret injection ──────────────────────────────────────────
-# Streamlit Cloud stores secrets in st.secrets (not env vars).
-# We copy them into os.environ here so that tools.py and agent.py
-# (which use os.getenv) work identically on Cloud and locally.
+# Keys requested from the user via the sidebar UI. They are the SOLE
+# runtime source for credentials — we no longer pull from st.secrets.
+# Anything typed lives in st.session_state for the current session and
+# is copied into os.environ so tools.py / agent.py can read it.
 _SECRET_KEYS = (
     "OPENAI_API_KEY",
     "SERPAPI_API_KEY",
 )
-for _k in _SECRET_KEYS:
-    if not os.getenv(_k):
-        try:
-            os.environ[_k] = st.secrets[_k]
-        except (KeyError, FileNotFoundError):
-            pass  # Key not configured — demo/mock mode will be used
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -151,21 +145,28 @@ def _validate_inputs(
 with st.sidebar:
     st.title("✈️ AI Travel Assistant")
 
-    # ── User-supplied API keys (session-only, never persisted) ────────────────
-    # Anything typed here is held in st.session_state for the duration of this
-    # browser session and copied into os.environ so tools.py / agent.py pick it
-    # up. Nothing is written to disk, logged, or sent anywhere except the
-    # respective upstream provider when a search runs.
-    with st.expander("🔑 API Keys (optional — for live data)", expanded=False):
-        st.caption(
-            "Paste your own keys to run with live data. "
-            "Keys are kept in memory for this session only — they are never "
-            "saved to disk or logged. Leave blank to use demo/mock mode."
-        )
-        st.text_input("OPENAI_API_KEY", type="password", key="ui_OPENAI_API_KEY")
-        st.text_input("SERPAPI_API_KEY", type="password", key="ui_SERPAPI_API_KEY")
+    st.subheader("🔑 API Keys")
+    st.caption(
+        "Enter your keys to enable live data. They are held in memory for "
+        "this session only — never saved to disk or logged. Leave blank "
+        "to run in demo/mock mode."
+    )
+    st.text_input(
+        "OpenAI API Key",
+        type="password",
+        key="ui_OPENAI_API_KEY",
+        placeholder="sk-…",
+        help="Used for itinerary generation and chat. Get one at platform.openai.com.",
+    )
+    st.text_input(
+        "SerpAPI Key",
+        type="password",
+        key="ui_SERPAPI_API_KEY",
+        placeholder="Your SerpAPI key",
+        help="Used for live flight and hotel search. Get one at serpapi.com.",
+    )
 
-    # Apply UI-provided keys to os.environ (overrides .env / st.secrets).
+    # Copy UI keys into os.environ so tools.py / agent.py pick them up.
     # Invalidate the cached search if any key changed so the next search
     # actually re-runs against the new credentials.
     _keys_changed = False
@@ -176,6 +177,15 @@ with st.sidebar:
             _keys_changed = True
     if _keys_changed:
         _cached_search.clear()
+
+    _has_openai = bool(st.session_state.get("ui_OPENAI_API_KEY", "").strip())
+    _has_serpapi = bool(st.session_state.get("ui_SERPAPI_API_KEY", "").strip())
+    if _has_openai and _has_serpapi:
+        st.success("Live mode — both keys provided")
+    elif _has_openai or _has_serpapi:
+        st.info("Partial keys — missing services will use demo data")
+    else:
+        st.warning("Demo mode — both flights/hotels and AI replies use mock data")
 
     st.markdown("---")
     st.subheader("Trip Details")
