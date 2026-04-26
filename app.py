@@ -152,6 +152,41 @@ def _validate_inputs(
 
 with st.sidebar:
     st.title("✈️ AI Travel Assistant")
+
+    # ── User-supplied API keys (session-only, never persisted) ────────────────
+    # Anything typed here is held in st.session_state for the duration of this
+    # browser session and copied into os.environ so tools.py / agent.py pick it
+    # up. Nothing is written to disk, logged, or sent anywhere except the
+    # respective upstream provider when a search runs.
+    with st.expander("🔑 API Keys (optional — for live data)", expanded=False):
+        st.caption(
+            "Paste your own keys to run with live data. "
+            "Keys are kept in memory for this session only — they are never "
+            "saved to disk or logged. Leave blank to use demo/mock mode."
+        )
+        st.text_input("OPENAI_API_KEY", type="password", key="ui_OPENAI_API_KEY")
+        st.text_input("SERPAPI_API_KEY", type="password", key="ui_SERPAPI_API_KEY")
+        st.text_input(
+            "BOOKING_MCP_ENDPOINT",
+            key="ui_BOOKING_MCP_ENDPOINT",
+            placeholder="https://…",
+        )
+        st.text_input(
+            "BOOKING_MCP_API_KEY", type="password", key="ui_BOOKING_MCP_API_KEY"
+        )
+
+    # Apply UI-provided keys to os.environ (overrides .env / st.secrets).
+    # Invalidate the cached search if any key changed so the next search
+    # actually re-runs against the new credentials.
+    _keys_changed = False
+    for _k in _SECRET_KEYS:
+        _v = st.session_state.get(f"ui_{_k}", "").strip()
+        if _v and os.environ.get(_k) != _v:
+            os.environ[_k] = _v
+            _keys_changed = True
+    if _keys_changed:
+        _cached_search.clear()
+
     st.markdown("---")
     st.subheader("Trip Details")
 
